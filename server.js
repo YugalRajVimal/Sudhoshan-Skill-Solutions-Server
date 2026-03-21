@@ -11,6 +11,13 @@ const app = express();
 const allowedOrigins = [
   "http://localhost:5173", // Vite
   "http://localhost:3000", // optional
+  "https://sudhoshan-skill-solutions-admin.onrender.com",
+  "https://www.sudhoshan-skill-solutions-admin.onrender.com",
+  "https://sudhosanskillsolutions.in",
+  "https://www.sudhosanskillsolutions.in",
+  "https://admin.sudhosanskillsolutions.in",
+  "https://www.admin.sudhosanskillsolutions.in",
+
   process.env.FRONTEND_URL
 ];
 
