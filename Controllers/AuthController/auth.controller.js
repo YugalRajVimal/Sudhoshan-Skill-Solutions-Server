@@ -2,6 +2,7 @@
 import jwt from "jsonwebtoken";
 import ExpiredTokenModel from "../../Schema/expired-token.schema.js";
 import { Admin } from "../../Schema/admin.schema.js";
+import sendMail from "../../config/nodeMailer.config.js";
 
 class AuthController {
   // Admin: Check Auth (admin dashboard)
@@ -51,9 +52,9 @@ class AuthController {
       }
 
       // Generate 6-digit OTP (or 000000 in dev)
-      // const otp = Math.floor(100000 + Math.random() * 900000).toString();
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
       // For now, set constant OTP
-      const otp = "000000";
+      // const otp = "000000";
 
       // Save OTP with expiry (10 min)
       await Admin.findByIdAndUpdate(
@@ -68,6 +69,19 @@ class AuthController {
       );
 
       // Optionally: Send OTP via email
+      // Send OTP using configured mailer
+      // Dynamically import sendMail, assuming ESM context
+
+      const subject = 'Your Admin OTP for Sudhoshan Skill Solutions';
+      const message = `Dear Admin,\n\nYour OTP for login is: ${otp}\n\nThis code will expire in 10 minutes.\nIf you did not request this code, please ignore this email.\n\nBest regards,\nSudhoshan Skill Solutions Team`;
+
+      try {
+        await sendMail(email, subject, message);
+      } catch (mailError) {
+        console.error("Failed to send OTP email:", mailError);
+        // Optionally: return error, or just log and proceed
+        // return res.status(500).json({ message: "Error sending OTP email" });
+      }
 
       return res.status(200).json({ message: "OTP sent successfully" });
     } catch (error) {
