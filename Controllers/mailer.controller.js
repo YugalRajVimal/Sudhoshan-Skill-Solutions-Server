@@ -472,14 +472,16 @@ class MailerController {
     });
   };
 
-// --- Handle Admission Form Submission ---
+// --- Handle Admission Form Submission (updated for new fields) ---
 admissionMail = async (req, res) => {
-  // Expecting: fullName, email, phone, desiredCourse, qualification, notes
+  // Expecting new shape: fullName, email, phone, city, state, course, qualification, notes
   const {
     fullName,
     email,
     phone,
-    desiredCourse,
+    city,
+    state,
+    course,
     qualification,
     notes,
   } = req.body || {};
@@ -488,7 +490,9 @@ admissionMail = async (req, res) => {
   const fn = fullName || "—";
   const em = email || "—";
   const ph = phone || "—";
-  const crs = desiredCourse || "—";
+  const cityVal = city || "—";
+  const stateVal = state || "—";
+  const crs = course || "—";
   const qual = qualification || "—";
   const note = notes || "—";
 
@@ -520,11 +524,19 @@ admissionMail = async (req, res) => {
               <td style="padding:10px 12px;background:#f7faff;border-radius:0 6px 6px 0;">${ph}</td>
             </tr>
             <tr>
-              <td style="padding:10px 12px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Desired Course:</td>
+              <td style="padding:10px 12px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">City / District:</td>
+              <td style="padding:10px 12px;background:#f7faff;border-radius:0 6px 6px 0;">${cityVal}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 12px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">State:</td>
+              <td style="padding:10px 12px;background:#f7faff;border-radius:0 6px 6px 0;">${stateVal}</td>
+            </tr>
+            <tr>
+              <td style="padding:10px 12px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Course Interest:</td>
               <td style="padding:10px 12px;background:#f7faff;border-radius:0 6px 6px 0;">${crs}</td>
             </tr>
             <tr>
-              <td style="padding:10px 12px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Educational Qualification:</td>
+              <td style="padding:10px 12px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Highest Qualification:</td>
               <td style="padding:10px 12px;background:#f7faff;border-radius:0 6px 6px 0;">${qual}</td>
             </tr>
             <tr>
@@ -534,7 +546,9 @@ admissionMail = async (req, res) => {
               </td>
             </tr>
           </table>
-          <p style="font-size:0.99rem; margin-top:1.9em;margin-bottom:14px;color:#888;">The admissions team should review and initiate the next steps as soon as possible.</p>
+          <p style="font-size:0.99rem; margin-top:1.9em;margin-bottom:14px;color:#888;">
+            The admissions team should review and initiate the next steps as soon as possible.
+          </p>
         </div>
       </div>
     </div>
@@ -557,7 +571,9 @@ admissionMail = async (req, res) => {
           </p>
           <div style="font-size:0.98rem;background:#f6f8fa;padding:12px 16px;border-radius:8px;line-height:1.6;margin:24px 0 0 0;">
             <div style="font-weight:600;margin-bottom:4px;color:#1b3d67;">What you submitted:</div>
-            <div><b>Desired Course:</b> ${crs}</div>
+            <div><b>City / District:</b> ${cityVal}</div>
+            <div><b>State:</b> ${stateVal}</div>
+            <div><b>Course Interest:</b> ${crs}</div>
             <div><b>Qualification:</b> ${qual}</div>
             ${note !== "—" ? `<div><b>Notes:</b> <span style="color:#375;">${note}</span></div>` : ""}
           </div>
