@@ -631,6 +631,209 @@ admissionMail = async (req, res) => {
   });
 };
 
+// --- Handle Job Application Submission ---
+jobApplyMail = async (req, res) => {
+  /*
+    API expects multipart/form-data with fields:
+      name: string,
+      email: string,
+      phone: string,
+      message: string (optional),
+      jobTitle: string,
+      jobCompany: string,
+      jobLocation: string,
+      resume: file
+    Responds with status and message.
+  */
+  try {
+    // Use require (dynamic import) where necessary
+    // 1. Get fields from body and resume file
+    const { name, email, phone, message, jobTitle, jobCompany, jobLocation } = req.body || {};
+    const resumeFile = req.file || (req.files && req.files.resume);
+
+    // Validate required fields
+    if (
+      !name ||
+      !email ||
+      !phone ||
+      !jobTitle ||
+      !jobCompany ||
+      !jobLocation ||
+      !resumeFile
+    ) {
+      // Cleanup if resume file already uploaded but missing field detected
+      if (resumeFile && resumeFile.path) {
+        deleteUploadedFile(resumeFile);
+      }
+      return res.status(400).json({ error: "All fields (including resume file) are required." });
+    }
+
+    // Compose cover/form values
+    const nm = name || "—";
+    const em = email || "—";
+    const ph = phone || "—";
+    const msg = message || "—";
+    const jt = jobTitle || "—";
+    const jc = jobCompany || "—";
+    const jl = jobLocation || "—";
+
+    // Compose email HTML for admin/recruiter
+    const appliedHtml = `
+      <div style="font-family:'Segoe UI',Arial,sans-serif; padding: 20px;">
+        <div style="max-width:650px; margin:auto; background:#fff; border-radius:18px; box-shadow:0 8px 32px rgba(51,82,153,0.13); overflow:hidden; border:1.5px solid #e3eaf2;">
+          <div style="background:linear-gradient(90deg,#f87629 60%,#144bbb 100%); color:#fff; text-align:center; padding:24px 0 14px 0;">
+            <div style="font-size:2.2rem;margin-bottom:6px;">💼</div>
+            <h1 style="margin:0;font-size:1.55rem;font-weight:bold;">
+              New Job Application – ${jt}
+            </h1>
+          </div>
+          <div style="padding:28px 25px 14px 25px;">
+            <table style="width:100%; border-collapse:separate; border-spacing:0 8px;">
+              <tr>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Name:</td>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:0 6px 6px 0;">${nm}</td>
+              </tr>
+              <tr>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Email:</td>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:0 6px 6px 0;">${em}</td>
+              </tr>
+              <tr>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Phone:</td>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:0 6px 6px 0;">${ph}</td>
+              </tr>
+              <tr>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Job Title:</td>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:0 6px 6px 0;">${jt}</td>
+              </tr>
+              <tr>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Company:</td>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:0 6px 6px 0;">${jc}</td>
+              </tr>
+              <tr>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Location:</td>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:0 6px 6px 0;">${jl}</td>
+              </tr>
+              <tr>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Cover Letter / Message:</td>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:0 6px 6px 0;white-space:pre-line;">${msg}</td>
+              </tr>
+            </table>
+            <p style="margin-top:14px;font-size:0.97rem;color:#345;">Resume is attached to this email.</p>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Compose confirmation HTML for candidate
+    const confHtml = `
+      <div style="font-family:'Segoe UI',Arial,sans-serif; padding: 22px;">
+        <div style="max-width:550px; margin:auto; background:#fff; border-radius:17px; box-shadow:0 7px 24px rgba(51,82,153,0.14); border:1.2px solid #e3eaf2;">
+          <div style="background:linear-gradient(90deg,#1586f4 60%,#f87629 100%); color:#fff; text-align:center; padding:23px 0 11px 0;">
+            <h2 style="margin:0;font-size:1.4rem;font-weight:bold;">
+              Thank You For Applying!
+            </h2>
+          </div>
+          <div style="padding:27px 22px 15px 22px;">
+            <p style="font-size:1.12rem; color:#194183;">
+              Dear <b>${nm}</b>,<br /><br />
+              We have received your application for the <b>${jt}</b> position at <b>${jc}</b>.<br/>
+              <span style="color:#F87629;">Our team will review your application and contact you soon if shortlisted.</span>
+              <br /><br/>
+              Thank you for applying through Sudhosan Skill Solutions!
+            </p>
+          </div>
+          <div style="background:linear-gradient(90deg,#1586f4 60%,#f87629 100%); color:#fff; text-align:center; padding:9px 0; border-bottom-left-radius: 17px; border-bottom-right-radius:17px;">
+            <span style="font-size:0.92em;">Sudhosan Skill Solutions Careers Team</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Setup mail options to recruiter/admin (with resume attachment)
+    const mailOptions = {
+      from: process.env.MAILER_USER,
+      to: process.env.JOBS_RECEIVER || process.env.CONTACT_RECEIVER,
+      subject: `Job Application – ${jt}: ${nm}`,
+      html: appliedHtml,
+      attachments: [
+        {
+          filename: resumeFile.originalname || "resume.pdf",
+          path: resumeFile.path,
+        },
+      ],
+    };
+
+    // Setup confirmation mail to user
+    const mailOptions2 = {
+      from: process.env.MAILER_USER,
+      to: em,
+      subject: `We Received Your Job Application – Sudhosan Skill Solutions`,
+      html: confHtml,
+    };
+
+    // Import transporter (nodemailer transport, probably already at top scope)
+    // Use existing transporter if available, else quick import.
+    let transporter = global.transporter;
+    if (!transporter) {
+      const nodemailerModule = await import("nodemailer");
+      transporter = nodemailerModule.default.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.MAILER_USER,
+          pass: process.env.MAILER_PASS,
+        },
+      });
+      global.transporter = transporter;
+    }
+
+    // Cleanup helper (delete uploaded file)
+    const cleanupResumeFile = () => {
+      if (resumeFile && resumeFile.path) {
+        deleteUploadedFile(resumeFile);
+      }
+    };
+
+    // Helper to handle success
+    const sendSuccess = (httpMsg) => {
+      cleanupResumeFile();
+      return res.status(200).send(httpMsg);
+    };
+    // Helper to handle errors
+    const sendError = (code, errMsg) => {
+      cleanupResumeFile();
+      return res.status(code).send(errMsg);
+    };
+
+    // Send admin/recruiter mail
+    transporter.sendMail(mailOptions, (error) => {
+      if (error) {
+        console.error("Job Application sendMail error:", error);
+        return sendError(500, "Error sending your application. Please try again later.");
+      }
+      // Send confirmation if email valid
+      if (em && typeof em === "string" && em.includes("@")) {
+        transporter.sendMail(mailOptions2, (error) => {
+          if (error) {
+            console.error("Job Application confirmationMail error:", error);
+            return sendError(500, "Application submitted, but confirmation email could not be sent.");
+          }
+          return sendSuccess(
+            "Your application was submitted successfully. A confirmation email was sent to you by Sudhosan Skill Solutions."
+          );
+        });
+      } else {
+        return sendSuccess(
+          "Your application was submitted. Thank you for applying!"
+        );
+      }
+    });
+  } catch (error) {
+    console.error("Job Application catch error:", error);
+    return res.status(500).send("An error occurred while submitting your application.");
+  }
+};
+
+
 subscribeUser = async (req, res) => {
   /*
     API expects req.body to have:

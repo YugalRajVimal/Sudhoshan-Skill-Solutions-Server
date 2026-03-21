@@ -114,6 +114,13 @@ router.post("/contact-us-mail", (req, res) => mailerController.contactUsMail(req
 router.post("/talk-to-recruiter-mail", upload.single("resume"), (req, res) => mailerController.talkToRecruiterMail(req, res));
 
 router.post("/admission-mail", (req, res) => mailerController.admissionMail(req, res));
+// Job application endpoint (expects multipart/form-data; uses file upload middleware)
+router.post(
+  "/job-apply",
+  upload.single("resume"),
+  (req, res) => mailerController.jobApplyMail(req, res)
+);
+
 
 // Newsletter subscribe endpoint
 router.post("/subscribe-newsletter", (req, res) => mailerController.subscribeUser(req, res));
