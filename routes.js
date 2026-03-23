@@ -115,6 +115,11 @@ router.post("/talk-to-recruiter-mail", upload.single("resume"), (req, res) => ma
 
 router.post("/admission-mail", (req, res) => mailerController.admissionMail(req, res));
 // Job application endpoint (expects multipart/form-data; uses file upload middleware)
+
+// Course enrollment endpoint (expects application/json or form-data)
+router.post("/enroll-mail", (req, res) => mailerController.enrollMail(req, res));
+
+
 router.post(
   "/job-apply",
   upload.single("resume"),

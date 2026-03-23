@@ -631,6 +631,167 @@ admissionMail = async (req, res) => {
   });
 };
 
+// --- Handle Course Enroll Form Submission ---
+enrollMail = async (req, res) => {
+  /*
+    API expects application/json or form-data with fields:
+      name: string,
+      email: string,
+      phone: string,
+      courseTitle: string,
+      message: string (optional)
+    Responds with status and message.
+  */
+  try {
+    const { name, email, phone, courseTitle, message } = req.body || {};
+
+    // Validate required fields
+    if (
+      !name ||
+      !email ||
+      !phone ||
+      !courseTitle
+    ) {
+      return res.status(400).json({ error: "All fields (except message) are required." });
+    }
+
+    const nm = name;
+    const em = email;
+    const ph = phone;
+    const course = courseTitle;
+    const msg = message || "—";
+
+    // Compose email HTML for admin/academy team
+    const adminHtml = `
+      <div style="font-family:'Segoe UI',Arial,sans-serif; background:#f5f8fa; padding:24px;">
+        <div style="max-width:520px; margin:auto; background:white; border-radius:19px; overflow:hidden; border:1.5px solid #2563eb; box-shadow:0 2px 8px 0 #173f6833;">
+          <div style="background:linear-gradient(90deg,#164194 70%,#f87629 100%); color:#fff; text-align:center; padding:9px 0; border-top-left-radius: 17px; border-top-right-radius:17px;">
+            <span style="font-size:0.98em;">Sudhosan Skill Solutions - Course Enquiry</span>
+          </div>
+          <div style="padding:22px 25px 30px 25px;">
+            <h2 style="color:#194183; margin-top:0; font-size:1.28rem; margin-bottom:1.2em;">New Course Enrollment Request</h2>
+            <table cellpadding="0" cellspacing="0" border="0" style="width:100%; margin-bottom:1.8em;">
+              <tr>
+                <td style="color:#436cc1; font-weight:bold; padding:5px 0; width:140px;">Name:</td>
+                <td style="color:#194183; padding:5px 0;">${nm}</td>
+              </tr>
+              <tr>
+                <td style="color:#436cc1; font-weight:bold; padding:5px 0;">Email:</td>
+                <td style="color:#194183; padding:5px 0;">${em}</td>
+              </tr>
+              <tr>
+                <td style="color:#436cc1; font-weight:bold; padding:5px 0;">Phone:</td>
+                <td style="color:#194183; padding:5px 0;">${ph}</td>
+              </tr>
+              <tr>
+                <td style="color:#436cc1; font-weight:bold; padding:5px 0;">Course:</td>
+                <td style="color:#194183; padding:5px 0;">${course}</td>
+              </tr>
+              <tr>
+                <td style="color:#436cc1; font-weight:bold; padding:5px 0;">Message:</td>
+                <td style="color:#194183; padding:5px 0;">${msg}</td>
+              </tr>
+            </table>
+            <div style="color:#5568ad; font-size:0.97rem;">
+              This request was submitted from the Course Page.<br/>
+              Please contact the candidate at your earliest convenience.
+            </div>
+          </div>
+          <div style="background:linear-gradient(90deg,#1586f4 60%,#f87629 100%); color:#fff; text-align:center; padding:8px 0; border-bottom-left-radius:17px; border-bottom-right-radius:17px;">
+            <span style="font-size:0.92em;">Sudhosan Skill Solutions Team</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Compose confirmation mail to user
+    const confirmationHtml = `
+      <div style="font-family:'Segoe UI',Arial,sans-serif; background:#f7fafc; padding:24px;">
+        <div style="max-width:500px; margin:auto; background:white; border-radius:18px; overflow:hidden; border:1.5px solid #2563eb;">
+          <div style="background:linear-gradient(90deg,#164194 70%,#f87629 100%); color:#fff; text-align:center; padding:10px 0; border-top-left-radius: 16px; border-top-right-radius:16px;">
+            <span style="font-size:1em;">Sudhosan Skill Solutions – Enrollment Confirmation</span>
+          </div>
+          <div style="padding:26px 25px 22px 25px;">
+            <p style="font-size:1.12rem; color:#194183;">
+              Dear <b>${nm}</b>,<br /><br />
+              Thank you for your interest in the <b>${course}</b> course at <b>Sudhosan Skill Solutions</b>.<br/>
+              <span style="color:#F87629;">Our academic team will contact you soon to guide you through the enrollment process and answer any queries.</span>
+              <br /><br/>
+              We appreciate your trust in us to advance your skills!
+            </p>
+          </div>
+          <div style="background:linear-gradient(90deg,#1586f4 60%,#f87629 100%); color:#fff; text-align:center; padding:9px 0; border-bottom-left-radius: 16px; border-bottom-right-radius:16px;">
+            <span style="font-size:0.92em;">Sudhosan Skill Solutions Academy</span>
+          </div>
+        </div>
+      </div>
+    `;
+
+    // Setup mail options (to admin/academy)
+    const mailOptions = {
+      from: process.env.MAILER_USER,
+      to: process.env.ADMISSION_RECEIVER || process.env.CONTACT_RECEIVER,
+      subject: `Course Enrollment Request: ${course} (${nm})`,
+      html: adminHtml,
+    };
+
+    // Setup confirmation mail (to user)
+    const mailOptions2 = {
+      from: process.env.MAILER_USER,
+      to: em,
+      subject: `Your Enrollment Request for ${course} – Sudhosan Skill Solutions`,
+      html: confirmationHtml,
+    };
+
+    // Get transporter (using global if exists)
+    let transporter = global.transporter;
+    if (!transporter) {
+      const nodemailerModule = await import("nodemailer");
+      transporter = nodemailerModule.default.createTransport({
+        service: "gmail",
+        auth: {
+          user: process.env.MAILER_USER,
+          pass: process.env.MAILER_PASS,
+        },
+      });
+      global.transporter = transporter;
+    }
+
+    // Send admin mail
+    transporter.sendMail(mailOptions, (error) => {
+      if (error) {
+        console.error("Course Enroll sendMail error:", error);
+        return res.status(500).send("There was an error submitting your enrollment request. Please try again later.");
+      }
+      // Send confirmation if sender email valid
+      if (em && typeof em === "string" && em.includes("@")) {
+        transporter.sendMail(mailOptions2, (error) => {
+          if (error) {
+            console.error("Course Enroll confirmationMail error:", error);
+            return res
+              .status(500)
+              .send("Your request was received, but there was an error sending the confirmation email.");
+          }
+          return res
+            .status(200)
+            .send(
+              "Your enrollment request was submitted successfully. A confirmation email was sent to you by Sudhosan Skill Solutions."
+            );
+        });
+      } else {
+        return res
+          .status(200)
+          .send("Your enrollment request was submitted. Thank you!");
+      }
+    });
+
+  } catch (error) {
+    console.error("Course Enroll catch error:", error);
+    return res.status(500).send("An error occurred while submitting your enrollment request.");
+  }
+};
+
+
 // --- Handle Job Application Submission ---
 jobApplyMail = async (req, res) => {
   /*
