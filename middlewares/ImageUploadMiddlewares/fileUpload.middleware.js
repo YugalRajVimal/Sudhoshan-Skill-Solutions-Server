@@ -1,53 +1,34 @@
 import multer from "multer";
 import fs from "fs";
 
+// Allowed image fields
+const allowedFields = [
+  "clientLogo",
+  "testimonialProfileImage",
+  "teamProfileImage",
+  "blogImage",
+];
+
 // Configure disk storage
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
     let uploadPath = "./Uploads/";
 
-    const therapistFileFields = [
-      "aadhaarFront",
-      "aadhaarBack",
-      "photo",
-      "resume",
-      "certificate",
-    ];
-
-    if (
-      therapistFileFields.includes(file.fieldname) &&
-      req.method === "POST" &&
-      req.originalUrl &&
-      (
-        req.originalUrl === "/api/admin/therapist" ||
-        req.originalUrl.endsWith("/admin/therapist")
-      )
-    ) {
-      uploadPath = "./Uploads/Therapist";
-    } 
-    else if (file.fieldname === "excelFile") {
-      uploadPath = "./Uploads/ExcelFiles";
-    }
-    else if (
-      file.fieldname === "licensePlateFrontImage" ||
-      file.fieldname === "licensePlateBackImage" ||
-      file.fieldname === "carImages" ||
-      file.fieldname === "vehiclePhotos"
-    ) {
-      uploadPath = "./Uploads/Vehicles";
-    }
-    else if (file.fieldname === "businessLogo") {
-      uploadPath = "./Uploads/AutoShops";
-    }
-    else if (file.fieldname === "teamMemberPhoto") {
-      uploadPath = "./Uploads/TeamMembers";
-    }
-    else if (file.fieldname === "profilePhoto") {
-      uploadPath = "./Uploads/UserProfiles";
-    }
-    // Add a case for resumes outside therapist (if needed)
-    else if (file.fieldname === "resume") {
-      uploadPath = "./Uploads/Resumes";
+    switch (file.fieldname) {
+      case "clientLogo":
+        uploadPath = "./Uploads/ClientLogos";
+        break;
+      case "testimonialProfileImage":
+        uploadPath = "./Uploads/TestimonialProfiles";
+        break;
+      case "teamProfileImage":
+        uploadPath = "./Uploads/TeamProfiles";
+        break;
+      case "blogImage":
+        uploadPath = "./Uploads/BlogImages";
+        break;
+      default:
+        uploadPath = "./Uploads/Other";
     }
 
     fs.mkdirSync(uploadPath, { recursive: true });
@@ -61,42 +42,15 @@ const storage = multer.diskStorage({
   },
 });
 
-// ✅ CLEAN & STANDARDIZED FILE FILTER
+// File filter for images only for the specified fields
 const fileFilter = (req, file, cb) => {
-  // Excel validation
-  if (
-    file.fieldname === "excelFile" &&
-    !/\.(xls|xlsx)$/i.test(file.originalname)
-  ) {
-    return cb(new Error("Only Excel files are allowed"), false);
-  }
-
-  // Image validation
-  const imageFields = [
-    "licensePlateFrontImage",
-    "licensePlateBackImage",
-    "carImages",
-    "vehiclePhotos",
-    "businessLogo",
-    "teamMemberPhoto",
-    "profilePhoto",
-  ];
-
-  if (imageFields.includes(file.fieldname)) {
+  if (allowedFields.includes(file.fieldname)) {
     if (!file.mimetype.startsWith("image/")) {
       return cb(new Error("Only image files are allowed"), false);
     }
+    return cb(null, true);
   }
-
-  // Resume validation (allow only pdf, doc, docx)
-  if (
-    file.fieldname === "resume" &&
-    !/\.(pdf|doc|docx)$/i.test(file.originalname)
-  ) {
-    return cb(new Error("Only PDF or Word documents are allowed for resume"), false);
-  }
-
-  cb(null, true);
+  return cb(new Error("Invalid field for image upload"), false);
 };
 
 export const upload = multer({

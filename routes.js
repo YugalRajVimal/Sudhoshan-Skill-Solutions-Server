@@ -10,6 +10,9 @@ import AdminBlogController from "./Controllers/Admin/blog.controller.js";
 import MailerController from "./Controllers/mailer.controller.js";
 import { upload } from "./middlewares/ImageUploadMiddlewares/fileUpload.middleware.js";
 import SubscribedUser from "./Schema/subscribed-users.schema.js";
+import AdminTestimonialController from "./Controllers/Admin/testimonial.controller.js";
+import TeamMember from "./Schema/team.schema.js";
+import statsAndClientSchema from "./Schema/statsAndClient.schema.js";
 
 
 
@@ -29,33 +32,30 @@ const adminCourcesController = new AdminCourcesController();
 const adminJobController = new AdminJobController();
 const adminBlogController = new AdminBlogController();
 const mailerController = new MailerController();
-
+const adminTestimonialController = new AdminTestimonialController();
 
 
 
 router.get("/all-data", async (req, res) => {
   try {
-    // Use the real controller methods directly, not with fake req/res
-    // These controller methods expect (req, res) but for this endpoint, 
-    // it's more robust to query the models directly for raw data.
-
-    // Assuming you want public, all-data (not admin-only, so "fetch" not "create"/"edit")
-    // You could import the models directly here for a more robust aggregation.
-
+    // Fetch services, courses, jobs, testimonials, team members, stats, and clients/partners
     const [
       services,
       courses,
-      jobs
+      jobs,
+      testimonials,
+      teamMembers,
+      stats,
+      clients,
     ] = await Promise.all([
       adminServicesController.fetchServices
         ? await (async () => {
-            // fetchServices expects req and res, so simulate response handling with a Promise
             return new Promise((resolve, reject) => {
               adminServicesController.fetchServices(
-                { query: {} }, 
-                { 
-                  json: resolve, 
-                  status: () => ({ json: reject })
+                { query: {} },
+                {
+                  json: resolve,
+                  status: () => ({ json: reject }),
                 }
               );
             });
@@ -65,10 +65,10 @@ router.get("/all-data", async (req, res) => {
         ? await (async () => {
             return new Promise((resolve, reject) => {
               adminCourcesController.fetchCourses(
-                { query: {} }, 
-                { 
-                  json: resolve, 
-                  status: () => ({ json: reject })
+                { query: {} },
+                {
+                  json: resolve,
+                  status: () => ({ json: reject }),
                 }
               );
             });
@@ -78,21 +78,62 @@ router.get("/all-data", async (req, res) => {
         ? await (async () => {
             return new Promise((resolve, reject) => {
               adminJobController.fetchJobs(
-                { query: {} }, 
-                { 
-                  json: resolve, 
-                  status: () => ({ json: reject })
+                { query: {} },
+                {
+                  json: resolve,
+                  status: () => ({ json: reject }),
                 }
               );
             });
           })()
         : [],
+      adminTestimonialController.fetchTestimonials
+        ? await (async () => {
+            return new Promise((resolve, reject) => {
+              adminTestimonialController.fetchTestimonials(
+                { query: {} },
+                {
+                  json: resolve,
+                  status: () => ({ json: reject }),
+                }
+              );
+            });
+          })()
+        : [],
+      // All team members, newest first, or [] on error
+      TeamMember
+        ? await TeamMember.find().sort({ createdAt: -1 }).lean()
+        : [],
+      // Fetch all stats (assuming a Stats collection, adapt as needed)
+      // You may need to create the appropriate model/controller for stats if not existing
+      // Fetch stats (PlacementStatsAndClients: only latest, or [] if none/error)
+      (await (async () => {
+        try {
+          const latestDoc = await statsAndClientSchema.findOne().sort({ createdAt: -1 }).lean();
+          return latestDoc?.stats || [];
+        } catch (e) {
+          return [];
+        }
+      })()),
+      // Fetch clients/partners (PlacementStatsAndClients: only latest, or [] if none/error)
+      (await (async () => {
+        try {
+          const latestDoc = await statsAndClientSchema.findOne().sort({ createdAt: -1 }).lean();
+          return latestDoc?.clients || [];
+        } catch (e) {
+          return [];
+        }
+      })()),
     ]);
 
     res.json({
       services,
       courses,
       jobs,
+      testimonials,
+      teamMembers,
+      stats,
+      clients,
     });
   } catch (error) {
     res.status(500).json({ error: error.message || "Failed to fetch data." });
@@ -103,8 +144,6 @@ router.get("/all-data", async (req, res) => {
 
 
 router.get("/blogs", (req, res) => adminBlogController.fetchBlogs(req, res));
-
-
 
 
 
