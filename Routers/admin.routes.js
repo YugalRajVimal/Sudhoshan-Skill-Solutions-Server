@@ -24,6 +24,10 @@ adminRouter.get("/", (req, res) => {
   res.send("Welcome to Sudhoshan Skill Solutions Admin APIs");
 });
 
+// Dashboard counts/summary endpoint
+adminRouter.get("/dashboard-details", (req, res) => adminController.getDashboardCounts(req, res));
+
+
 // Service Management Routes
 adminRouter.post("/services", (req, res) => adminServicesController.createService(req, res));
 adminRouter.get("/services", (req, res) => adminServicesController.fetchServices(req, res));
