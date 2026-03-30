@@ -803,30 +803,29 @@ jobApplyMail = async (req, res) => {
       jobTitle: string,
       jobCompany: string,
       jobLocation: string,
-      resume: file
+      resume: file (optional),
+      classType: string (optional; e.g., "group" or "single")
     Responds with status and message.
   */
   try {
-    // Use require (dynamic import) where necessary
     // 1. Get fields from body and resume file
-    const { name, email, phone, message, jobTitle, jobCompany, jobLocation } = req.body || {};
+    const { name, email, phone, message, jobTitle, jobCompany, jobLocation, classType } = req.body || {};
     const resumeFile = req.file || (req.files && req.files.resume);
 
-    // Validate required fields
+    // Validate required fields (resume and classType are now optional)
     if (
       !name ||
       !email ||
       !phone ||
       !jobTitle ||
       !jobCompany ||
-      !jobLocation ||
-      !resumeFile
+      !jobLocation
     ) {
       // Cleanup if resume file already uploaded but missing field detected
       if (resumeFile && resumeFile.path) {
         deleteUploadedFile(resumeFile);
       }
-      return res.status(400).json({ error: "All fields (including resume file) are required." });
+      return res.status(400).json({ error: "All fields except resume and class type are required." });
     }
 
     // Compose cover/form values
@@ -837,6 +836,14 @@ jobApplyMail = async (req, res) => {
     const jt = jobTitle || "—";
     const jc = jobCompany || "—";
     const jl = jobLocation || "—";
+    let classTypeDisplay = "—";
+    if (classType === "group") {
+      classTypeDisplay = "Online Group Classes";
+    } else if (classType === "single") {
+      classTypeDisplay = "Online Single Classes";
+    } else if (typeof classType === "string" && classType.trim().length > 0) {
+      classTypeDisplay = classType;
+    }
 
     // Compose email HTML for admin/recruiter
     const appliedHtml = `
@@ -875,17 +882,37 @@ jobApplyMail = async (req, res) => {
                 <td style="padding:9px 11px;background:#f7faff;border-radius:0 6px 6px 0;">${jl}</td>
               </tr>
               <tr>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Class Type:</td>
+                <td style="padding:9px 11px;background:#f7faff;border-radius:0 6px 6px 0;">${classTypeDisplay}</td>
+              </tr>
+              <tr>
                 <td style="padding:9px 11px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Cover Letter / Message:</td>
                 <td style="padding:9px 11px;background:#f7faff;border-radius:0 6px 6px 0;white-space:pre-line;">${msg}</td>
               </tr>
             </table>
-            <p style="margin-top:14px;font-size:0.97rem;color:#345;">Resume is attached to this email.</p>
+            <p style="margin-top:14px;font-size:0.97rem;color:#345;">
+            ${
+              resumeFile
+                ? "Resume is attached to this email."
+                : "<i>No resume was provided.</i>"
+            }
+            </p>
           </div>
         </div>
       </div>
     `;
 
     // Compose confirmation HTML for candidate
+    const confClassTypeHtml =
+      classTypeDisplay !== "—"
+        ? `
+          <tr>
+            <td style="padding:8px 10px;background:#f7faff;border-radius:6px 0 0 6px;color:#132e66;font-weight:bold;">Class Type:</td>
+            <td style="padding:8px 10px;background:#f7faff;border-radius:0 6px 6px 0;">${classTypeDisplay}</td>
+          </tr>
+        `
+        : "";
+
     const confHtml = `
       <div style="font-family:'Segoe UI',Arial,sans-serif; padding: 22px;">
         <div style="max-width:550px; margin:auto; background:#fff; border-radius:17px; box-shadow:0 7px 24px rgba(51,82,153,0.14); border:1.2px solid #e3eaf2;">
@@ -898,6 +925,7 @@ jobApplyMail = async (req, res) => {
             <p style="font-size:1.12rem; color:#194183;">
               Dear <b>${nm}</b>,<br /><br />
               We have received your application for the <b>${jt}</b> position at <b>${jc}</b>.<br/>
+              ${classTypeDisplay !== "—" ? `<br/>Preferred Class Type: <b>${classTypeDisplay}</b><br/>` : ""}
               <span style="color:#F87629;">Our team will review your application and contact you soon if shortlisted.</span>
               <br /><br/>
               Thank you for applying through Sudhosan Skill Solutions!
@@ -910,18 +938,22 @@ jobApplyMail = async (req, res) => {
       </div>
     `;
 
-    // Setup mail options to recruiter/admin (with resume attachment)
+    // Setup mail options to recruiter/admin
     const mailOptions = {
       from: process.env.MAILER_USER,
       to: process.env.JOBS_RECEIVER || process.env.CONTACT_RECEIVER,
       subject: `Job Application – ${jt}: ${nm}`,
       html: appliedHtml,
-      attachments: [
-        {
-          filename: resumeFile.originalname || "resume.pdf",
-          path: resumeFile.path,
-        },
-      ],
+      ...(resumeFile && resumeFile.path
+        ? {
+            attachments: [
+              {
+                filename: resumeFile.originalname || "resume.pdf",
+                path: resumeFile.path,
+              },
+            ],
+          }
+        : {}),
     };
 
     // Setup confirmation mail to user

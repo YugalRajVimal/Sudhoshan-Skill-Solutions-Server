@@ -1,12 +1,13 @@
 import multer from "multer";
 import fs from "fs";
 
-// Allowed image fields
+// Allowed fields for uploads (images and resume)
 const allowedFields = [
   "clientLogo",
   "testimonialProfileImage",
   "teamProfileImage",
   "blogImage",
+  "resume",
 ];
 
 // Configure disk storage
@@ -27,6 +28,9 @@ const storage = multer.diskStorage({
       case "blogImage":
         uploadPath = "./Uploads/BlogImages";
         break;
+      case "resume":
+        uploadPath = "./Uploads/Resumes";
+        break;
       default:
         uploadPath = "./Uploads/Other";
     }
@@ -42,15 +46,29 @@ const storage = multer.diskStorage({
   },
 });
 
-// File filter for images only for the specified fields
+// File filter for specific fields
 const fileFilter = (req, file, cb) => {
   if (allowedFields.includes(file.fieldname)) {
+    // For resume, allow common document types (pdf, doc, docx)
+    if (file.fieldname === "resume") {
+      const allowedMimeTypes = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      ];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        return cb(new Error("Only PDF, DOC, or DOCX files are allowed for resume"), false);
+      }
+      return cb(null, true);
+    }
+
+    // For all other fields, only allow images
     if (!file.mimetype.startsWith("image/")) {
       return cb(new Error("Only image files are allowed"), false);
     }
     return cb(null, true);
   }
-  return cb(new Error("Invalid field for image upload"), false);
+  return cb(new Error("Invalid field for upload"), false);
 };
 
 export const upload = multer({

@@ -43,6 +43,17 @@ const jobSchema = new mongoose.Schema(
       required: true,
       trim: true,
       description: "Role or domain (e.g., IT, Sales, Marketing, HR)"
+    },
+    categories: {
+      type: [String],
+      default: [],
+      description: "Categories describing the job (e.g., ['IT', 'Engineering', 'Management'])"
+    },
+    minimumQualification: {
+      type: String,
+      required: false,
+      trim: true,
+      description: "Minimum qualification required for the job (e.g., B.Tech, MBA, Diploma, 12th Pass, etc.)"
     }
   },
   { timestamps: true }
