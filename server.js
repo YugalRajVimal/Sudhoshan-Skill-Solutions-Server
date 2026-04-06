@@ -33,15 +33,13 @@ const corsOptions = {
   },
   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  credentials: true, // only if you need cookies
+  // credentials: true, // only if you need cookies
 };
 
 app.use(cors(corsOptions));
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-
-
 
 const port = process.env.PORT || 8822;
 
