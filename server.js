@@ -25,30 +25,23 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    console.log("Incoming origin:", origin);
-  
-    if (!origin) return callback(null, true);
-  
-    const isAllowed = allowedOrigins.includes(origin);
-  
-    if (isAllowed) {
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      console.log("Blocked origin:", origin);
       callback(new Error("Not allowed by CORS"));
     }
   },
-  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true, // only if you need cookies
 };
 
 app.use(cors(corsOptions));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ limit: '10mb', extended: true }));
-
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json({ limit: '10mb' }));
+
+
 
 const port = process.env.PORT || 8822;
 
