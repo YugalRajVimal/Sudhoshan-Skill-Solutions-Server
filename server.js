@@ -23,6 +23,20 @@ const allowedOrigins = [
   process.env.FRONTEND_URL,
 ];
 
+// Add this FIRST, before cors()
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader("Access-Control-Allow-Methods", "GET,POST,PUT,PATCH,DELETE,OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Origin,X-Requested-With,Content-Type,Accept,Authorization");
+  }
+  if (req.method === "OPTIONS") return res.sendStatus(204);
+  next();
+});
+
+
 // CORS CONFIGURATION: Handle preflight and normal requests robustly, without using app.options("*") (which Express 5+ no longer supports star in route).
 app.use(
   cors({
@@ -47,14 +61,6 @@ app.use(
   })
 );
 
-// Use express 5+ safe generic preflight handler: handle OPTIONS requests for any path _explicitly_.
-app.use((req, res, next) => {
-  if (req.method === "OPTIONS") {
-    res.sendStatus(204);
-  } else {
-    next();
-  }
-});
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
