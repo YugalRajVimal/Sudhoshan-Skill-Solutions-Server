@@ -1152,11 +1152,9 @@ sendMultiMail = async (req, res) => {
     let attachments = [];
 
     let isDeltaObj = false;
-    // If body is already parsed as object (e.g., req.body.body as parsed json)
     if (typeof body === "object" && Array.isArray(body.ops)) {
       isDeltaObj = true;
     } 
-    // If body is a stringified delta
     else if (typeof body === "string" && body.trim().startsWith("[{")) {
       // Try parsing as Quill delta (legacy, some clients send JSON string)
       try {
@@ -1168,13 +1166,10 @@ sendMultiMail = async (req, res) => {
       } catch (err) { /* ignore, not a delta */ }
     }
 
-    // Compose HTML from delta if present, else treat as literal HTML string
+    // Compose HTML and attachments (share for all mails)
     if (isDeltaObj) {
-      // Optionally scan for image ops and add as embedded images
       const ops = body.ops;
       let deltaConverter = new QuillDeltaToHtmlConverter(ops, {
-        // Add any needed options for html generation
-        // For inline styles and embed handling
         inlineStyles: true,
       });
 
@@ -1188,7 +1183,6 @@ sendMultiMail = async (req, res) => {
           op.insert.image &&
           op.insert.image.startsWith("data:image/")
         ) {
-          // Assign cid for this embedded image
           const cid = `quillimg${cidCount}@mail`;
           embedImages.push({
             dataUrl: op.insert.image,
@@ -1201,13 +1195,10 @@ sendMultiMail = async (req, res) => {
 
       html = deltaConverter.convert();
 
-      // Generate attachments for images
       attachments = embedImages.map(img => {
-        // Parse mimetype etc from data url
         const dataUrl = img.dataUrl;
-        // Example: data:image/png;base64,xxxxxxx
         const matches = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
-        if(!matches) return null;
+        if (!matches) return null;
         const mimeType = matches[1];
         const base64Data = matches[2];
         let ext = mimeType.split("/")[1];
@@ -1219,33 +1210,51 @@ sendMultiMail = async (req, res) => {
         };
       }).filter(a => !!a);
     } else {
-      // Just treat html as string
       html = body;
       attachments = [];
     }
 
-    // Compose mail options
-    const mailOptions = {
-      from: process.env.MAILER_USER,
-      to: recipientList, // array is supported by nodemailer
-      subject: subject,
-      html,
-      attachments,
-    };
+    // --- SEND EACH MAIL SEPARATELY so recipients are not visible to each other ---
+    let accepted = [];
+    let rejected = [];
+    let sendErrors = [];
+    for (let i = 0; i < recipientList.length; i++) {
+      const singleMailOptions = {
+        from: process.env.MAILER_USER,
+        to: recipientList[i], // send individually
+        subject: subject,
+        html,
+        attachments,
+      };
 
-    // Send the email
-    transporter.sendMail(mailOptions, (error, info) => {
-      if (error) {
-        console.error("MultiMailer sendMail error:", error);
-        return res.status(500).json({ error: "Failed to send emails. Please try again later." });
+      // eslint-disable-next-line no-await-in-loop
+      try {
+        // Use promise for await syntax (Nodemailer supports both)
+        // Wrap sendMail to work with async/await
+        await new Promise((resolve, reject) => {
+          transporter.sendMail(singleMailOptions, (error, info) => {
+            if (error) {
+              rejected.push(recipientList[i]);
+              sendErrors.push({ recipient: recipientList[i], error: error.message });
+              return reject(error);
+            } else {
+              accepted.push(recipientList[i]);
+              return resolve(info);
+            }
+          });
+        });
+      } catch (mailError) {
+        // already handled above
       }
-      // Return info such as accepted/rejected if needed
-      return res.status(200).json({
-        message: `Email sent successfully to ${info.accepted.length} recipient(s).`,
-        accepted: info.accepted,
-        rejected: info.rejected,
-      });
+    }
+
+    return res.status(200).json({
+      message: `Emails sent. Accepted: ${accepted.length}, Rejected: ${rejected.length}`,
+      accepted,
+      rejected,
+      errors: sendErrors,
     });
+
   } catch (err) {
     console.error("Error in sendMultiMail controller:", err);
     return res.status(500).json({ error: "Server error while sending emails." });
