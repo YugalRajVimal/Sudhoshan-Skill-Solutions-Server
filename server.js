@@ -8,6 +8,7 @@ import { connectUsingMongoose } from "./config/mongoose.config.js";
 const app = express();
 
 
+
 const allowedOrigins = [
   "http://localhost:5173", // Vite
   "http://localhost:3000", // optional
@@ -24,17 +25,17 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
+    console.log("Incoming origin:", origin);
+  
     if (!origin) return callback(null, true);
-
-    const isAllowed = allowedOrigins.some(
-      (o) => o && origin.startsWith(o)
-    );
-
+  
+    const isAllowed = allowedOrigins.includes(origin);
+  
     if (isAllowed) {
       callback(null, true);
     } else {
       console.log("Blocked origin:", origin);
-      callback(null, false);
+      callback(new Error("Not allowed by CORS"));
     }
   },
   credentials: true,
