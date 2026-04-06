@@ -20,24 +20,41 @@ const allowedOrigins = [
   "www.sudhosanskillsolutions.in",
   "admin.sudhosanskillsolutions.in",
   "www.admin.sudhosanskillsolutions.in",
-  process.env.FRONTEND_URL
+  process.env.FRONTEND_URL,
 ];
 
-// Properly restrict CORS to allowedOrigins
-app.use(cors({
-  origin: function (origin, callback) {
-    // allow requests with no origin (like mobile apps, curl, Postman)
-    if (!origin) return callback(null, true);
-    // check if the origin is in allowedOrigins or matches the .env FRONTEND_URL
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    // Optionally, support dev: allow localhost if needed, (uncomment if desired)
-    // if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
-    return callback(new Error("Not allowed by CORS"));
-  },
-  credentials: true,
-}));
+// CORS CONFIGURATION: Handle preflight and normal requests robustly, without using app.options("*") (which Express 5+ no longer supports star in route).
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      // Allow requests with no origin (like mobile apps, server-to-server, curl, Postman, etc.)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true,
+    allowedHeaders: [
+      "Origin",
+      "X-Requested-With",
+      "Content-Type",
+      "Accept",
+      "Authorization",
+    ],
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    optionsSuccessStatus: 204,
+  })
+);
+
+// Use express 5+ safe generic preflight handler: handle OPTIONS requests for any path _explicitly_.
+app.use((req, res, next) => {
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+  } else {
+    next();
+  }
+});
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
