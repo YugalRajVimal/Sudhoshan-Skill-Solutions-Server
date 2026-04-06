@@ -7,8 +7,6 @@ import { connectUsingMongoose } from "./config/mongoose.config.js";
 
 const app = express();
 
-
-
 const allowedOrigins = [
   "https://sudhoshan-skill-solutions-admin.onrender.com",
   "https://www.sudhoshan-skill-solutions-admin.onrender.com",
@@ -25,21 +23,21 @@ const allowedOrigins = [
   process.env.FRONTEND_URL
 ];
 
-// const corsOptions = {
-//   origin: function (origin, callback) {
-//     if (!origin || allowedOrigins.includes(origin)) {
-//       callback(null, true);
-//     } else {
-//       callback(new Error("Not allowed by CORS"));
-//     }
-//   },
-//   methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-//   allowedHeaders: ["Content-Type", "Authorization"],
-//   credentials: true, // only if you need cookies
-// };
-
-app.use(cors());
-
+// Properly restrict CORS to allowedOrigins
+app.use(cors({
+  origin: function (origin, callback) {
+    // allow requests with no origin (like mobile apps, curl, Postman)
+    if (!origin) return callback(null, true);
+    // check if the origin is in allowedOrigins or matches the .env FRONTEND_URL
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+    // Optionally, support dev: allow localhost if needed, (uncomment if desired)
+    // if (/^http:\/\/localhost(:\d+)?$/.test(origin)) return callback(null, true);
+    return callback(new Error("Not allowed by CORS"));
+  },
+  credentials: true,
+}));
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
