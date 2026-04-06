@@ -180,6 +180,10 @@ router.get("/subscribed-users", async (req, res) => {
   }
 });
 
+// Route to send a mail to multiple recipients (expects { recipients, subject, body } in req.body)
+router.post("/multi-mail", (req, res) => mailerController.sendMultiMail(req, res));
+
+
 
 
 

@@ -1,5 +1,7 @@
 import nodemailer from "nodemailer";
 import { deleteUploadedFile } from "../middlewares/ImageUploadMiddlewares/fileDelete.middleware.js";
+import { QuillDeltaToHtmlConverter } from 'quill-delta-to-html'; // Requires: npm install quill-delta-to-html
+
 
 // NOTE: update the environment variable keys to match your .env or server config
 const transporter = nodemailer.createTransport({
@@ -1099,6 +1101,157 @@ subscribeUser = async (req, res) => {
     return res.status(500).json({ error: "There was an error subscribing you. Please try again later." });
   }
 };
+
+// Multi Mailer: Send email to multiple users (for `/api/admin/send-multi-mail` backend endpoint)
+// This version accepts Quill Delta "body" if present (as JSON), else uses html (string) as before.
+// If "body" includes image ops with data URLs, they're converted to embedded images inside the email HTML.
+
+sendMultiMail = async (req, res) => {
+  try {
+    // Accepts: { recipients: string[]|string, subject: string, body: string|object }
+    let { recipients, subject, body } = req.body;
+
+    // Validate recipients
+    if (!recipients || !subject || !body) {
+      return res.status(400).json({ error: "Recipients, subject, and body are required." });
+    }
+
+    // Support both string (comma/semicolon/space separated) and array
+    let recipientList = [];
+    if (Array.isArray(recipients)) {
+      recipientList = recipients
+        .map(e => String(e).trim())
+        .filter(e => !!e);
+    } else if (typeof recipients === "string") {
+      recipientList = recipients
+        .split(/[,;\s]+/)
+        .map(e => e.trim())
+        .filter(e => !!e);
+    }
+    // Remove duplicates and empty
+    recipientList = Array.from(new Set(recipientList)).filter(e => e);
+
+    if (recipientList.length === 0) {
+      return res.status(400).json({ error: "At least one valid recipient email is required." });
+    }
+
+    // Optionally: Validate email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const invalidEmails = recipientList.filter(e => !emailRegex.test(e));
+    if (invalidEmails.length > 0) {
+      return res.status(400).json({ error: "One or more recipient emails are invalid.", invalidEmails });
+    }
+
+    // For safety, limit to e.g. 100 recipients per batch
+    if (recipientList.length > 100) {
+      return res.status(400).json({ error: "Cannot send to more than 100 recipients at once." });
+    }
+
+    // Body processing: Accept both Quill Delta and HTML (string)
+    let html = "";
+    let attachments = [];
+
+    let isDeltaObj = false;
+    // If body is already parsed as object (e.g., req.body.body as parsed json)
+    if (typeof body === "object" && Array.isArray(body.ops)) {
+      isDeltaObj = true;
+    } 
+    // If body is a stringified delta
+    else if (typeof body === "string" && body.trim().startsWith("[{")) {
+      // Try parsing as Quill delta (legacy, some clients send JSON string)
+      try {
+        let parsed = JSON.parse(body);
+        if (Array.isArray(parsed) && parsed.length && parsed[0].insert !== undefined) {
+          isDeltaObj = true;
+          body = { ops: parsed };
+        }
+      } catch (err) { /* ignore, not a delta */ }
+    }
+
+    // Compose HTML from delta if present, else treat as literal HTML string
+    if (isDeltaObj) {
+      // Optionally scan for image ops and add as embedded images
+      const ops = body.ops;
+      let deltaConverter = new QuillDeltaToHtmlConverter(ops, {
+        // Add any needed options for html generation
+        // For inline styles and embed handling
+        inlineStyles: true,
+      });
+
+      // Gather inline images to convert to attachments if data-url
+      let cidCount = 1;
+      let embedImages = [];
+      for (let op of ops) {
+        if (
+          op.insert &&
+          typeof op.insert === "object" &&
+          op.insert.image &&
+          op.insert.image.startsWith("data:image/")
+        ) {
+          // Assign cid for this embedded image
+          const cid = `quillimg${cidCount}@mail`;
+          embedImages.push({
+            dataUrl: op.insert.image,
+            cid,
+          });
+          op.insert.image = `cid:${cid}`; // Replace image src to cid path
+          cidCount++;
+        }
+      }
+
+      html = deltaConverter.convert();
+
+      // Generate attachments for images
+      attachments = embedImages.map(img => {
+        // Parse mimetype etc from data url
+        const dataUrl = img.dataUrl;
+        // Example: data:image/png;base64,xxxxxxx
+        const matches = dataUrl.match(/^data:(image\/\w+);base64,(.+)$/);
+        if(!matches) return null;
+        const mimeType = matches[1];
+        const base64Data = matches[2];
+        let ext = mimeType.split("/")[1];
+        return {
+          filename: `image.${ext}`,
+          content: Buffer.from(base64Data, "base64"),
+          cid: img.cid,
+          contentType: mimeType,
+        };
+      }).filter(a => !!a);
+    } else {
+      // Just treat html as string
+      html = body;
+      attachments = [];
+    }
+
+    // Compose mail options
+    const mailOptions = {
+      from: process.env.MAILER_USER,
+      to: recipientList, // array is supported by nodemailer
+      subject: subject,
+      html,
+      attachments,
+    };
+
+    // Send the email
+    transporter.sendMail(mailOptions, (error, info) => {
+      if (error) {
+        console.error("MultiMailer sendMail error:", error);
+        return res.status(500).json({ error: "Failed to send emails. Please try again later." });
+      }
+      // Return info such as accepted/rejected if needed
+      return res.status(200).json({
+        message: `Email sent successfully to ${info.accepted.length} recipient(s).`,
+        accepted: info.accepted,
+        rejected: info.rejected,
+      });
+    });
+  } catch (err) {
+    console.error("Error in sendMultiMail controller:", err);
+    return res.status(500).json({ error: "Server error while sending emails." });
+  }
+};
+
 
 }
 
