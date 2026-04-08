@@ -8,10 +8,10 @@ import { connectUsingMongoose } from "./config/mongoose.config.js";
 /**
  * CORS ORIGIN TROUBLESHOOTING
  *
- * Your CORS errors show that sometimes the value of Access-Control-Allow-Origin is set
- * to 'https://admin.sudhosanskillsolutions.in' even for requests from 'https://sudhosanskillsolutions.in'.
- * To fix: make 100% sure ONLY the actual requesting origin is echoed as the header,
- * IF that origin is in your allowedOrigins list. The code below guarantees that.
+ * To fix the CORS misrouting bug where the 'Access-Control-Allow-Origin' header
+ * is set to the wrong allowed origin (e.g., admin domain instead of the real one),
+ * we ensure that ONLY the exact requesting origin is echoed in the response
+ * IF AND ONLY IF it is listed in `allowedOrigins`.
  */
 
 const allowedOrigins = [
@@ -24,29 +24,39 @@ const allowedOrigins = [
   "https://admin.sudhosanskillsolutions.in",
   "https://www.admin.sudhosanskillsolutions.in",
   process.env.FRONTEND_URL,
-];
+].filter(Boolean); // Remove undefined if env not set
 
-// Make sure to use only CORS middleware (do NOT set any CORS headers by hand elsewhere!)
 const app = express();
 
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      // allow requests with no origin (Postman, curl)
-      if (!origin) return callback(null, true);
+// Custom CORS handling to prevent incorrect origin reflection
+app.use(function (req, res, next) {
+  const origin = req.headers.origin;
 
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        callback(new Error("Not allowed by CORS"));
-      }
-    },
-    credentials: true,
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  })
-);
+  if (!origin) {
+    // no CORS headers for server-to-server/Postman/curl etc.
+    return next();
+  }
 
+  // Check if the actual request origin is allowed
+  if (allowedOrigins.includes(origin)) {
+    res.header("Access-Control-Allow-Origin", origin);
+    res.header("Vary", "Origin"); // Important for caches/proxies
+    res.header("Access-Control-Allow-Credentials", "true");
+    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,PATCH,OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    if (req.method === "OPTIONS") {
+      // Preflight - advance response now with 200
+      return res.sendStatus(200);
+    }
+    return next();
+  } else {
+    // Not an allowed origin: do NOT set ACAO, fail preflight explicitly if needed
+    if (req.method === "OPTIONS") {
+      return res.status(403).send("CORS Forbidden: Origin not allowed");
+    }
+    return res.status(403).json({ error: "CORS Forbidden: Origin not allowed" });
+  }
+});
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
