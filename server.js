@@ -15,15 +15,16 @@ import { connectUsingMongoose } from "./config/mongoose.config.js";
  */
 
 const allowedOrigins = [
+  "https://sudhosanskillsolutions.in",
   "https://sudhoshan-skill-solutions-admin.onrender.com",
   "https://www.sudhoshan-skill-solutions-admin.onrender.com",
   "https://sudhoshan-skill-solutions.onrender.com",
   "https://www.sudhoshan-skill-solutions.onrender.com",
-  "https://sudhosanskillsolutions.in",
+  
   "https://www.sudhosanskillsolutions.in",
   "https://admin.sudhosanskillsolutions.in",
   "https://www.admin.sudhosanskillsolutions.in",
-  process.env.FRONTEND_URL,
+
 ].filter(Boolean); // Remove undefined if env not set
 
 const app = express();
