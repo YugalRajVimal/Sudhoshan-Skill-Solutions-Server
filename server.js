@@ -32,28 +32,21 @@ const app = express();
 app.use(
   cors({
     origin: function (origin, callback) {
-      // For server-to-server, mobile, or curl requests, no origin header may be present
+      // allow requests with no origin (Postman, curl)
       if (!origin) return callback(null, true);
-      // Echo back ONLY the actual requesting origin if it's allowed
+
       if (allowedOrigins.includes(origin)) {
-        return callback(null, origin); // 'origin' value will be reflected in the header
+        callback(null, true);
+      } else {
+        callback(new Error("Not allowed by CORS"));
       }
-      // Otherwise, CORS will block with an error
-      return callback(new Error("Not allowed by CORS: " + origin), false);
     },
     credentials: true,
-    allowedHeaders: [
-      "Origin",
-      "X-Requested-With",
-      "Content-Type",
-      "Accept",
-      "Authorization",
-    ],
-    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    optionsSuccessStatus: 204,
-    preflightContinue: false, // will handle OPTIONS with CORS response
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
