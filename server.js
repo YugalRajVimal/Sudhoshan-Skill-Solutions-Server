@@ -12,6 +12,15 @@ import { connectUsingMongoose } from "./config/mongoose.config.js";
  * such as responding with the admin domain to user traffic (or vice versa).
  * 
  * This approach is the recommended, standard-compliant way to do dynamic, secure multi-origin CORS.
+ * 
+ * --- PATCH FOR POST/OPTIONS CORS PRE-FLIGHT: ---
+ * We always echo ACTUAL ORIGIN on every request IF AND ONLY IF it is allowed. 
+ * We also add Vary: Origin.
+ * 
+ * If your requests are going through a proxy (like Render/nginx), make sure 
+ * that proxy does *not* override CORS headers. 
+ * 
+ * For debugging, log the origin and method for failed requests.
  */
 
 const allowedOrigins = [
@@ -25,14 +34,24 @@ const allowedOrigins = [
   "https://www.admin.sudhosanskillsolutions.in",
 ].filter(Boolean);
 
+// SAFEGUARD: Prevent trailing slash mismatch
+function normalizeOrigin(origin) {
+  return origin?.replace(/\/$/, "");
+}
+const allowedOriginsSet = new Set(allowedOrigins.map(normalizeOrigin));
+
 const app = express();
 
 // Strict, robust CORS middleware
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (!origin) return next(); // Non-browser/CLI/no Origin -> skip CORS
+  // Let non-browser or non-CORS requests through
+  if (!origin) return next();
 
-  if (allowedOrigins.includes(origin)) {
+  // Normalize for comparison (to avoid trailing slash issues)
+  const normalizedOrigin = normalizeOrigin(origin);
+
+  if (allowedOriginsSet.has(normalizedOrigin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
     res.setHeader("Access-Control-Allow-Credentials", "true");
@@ -42,15 +61,22 @@ app.use((req, res, next) => {
     );
     res.setHeader(
       "Access-Control-Allow-Headers",
-      "Content-Type,Authorization"
+      req.headers["access-control-request-headers"] ||
+        "Content-Type,Authorization"
     );
+
     if (req.method === "OPTIONS") {
-      // CORS preflight, short-circuit
+      // Preflight lives here; respond successfully!
       return res.sendStatus(200);
     }
     return next();
   } else {
-    // Disallowed origin. Do NOT set ACAO. Explicitly reject preflights.
+    // BLOCK disallowed origins, log for troubleshooting
+    if (process.env.NODE_ENV !== "production") {
+      console.error(
+        `[CORS] Blocked request: method=${req.method} origin=${origin} url=${req.originalUrl}`
+      );
+    }
     if (req.method === "OPTIONS") {
       return res.status(403).send("CORS Forbidden: Origin not allowed");
     }
