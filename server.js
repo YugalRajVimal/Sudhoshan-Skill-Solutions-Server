@@ -1,17 +1,17 @@
 import "dotenv/config";
 import express from "express";
-import cors from "cors";
 import bodyParser from "body-parser";
 import router from "./routes.js";
 import { connectUsingMongoose } from "./config/mongoose.config.js";
 
 /**
- * CORS ORIGIN TROUBLESHOOTING
+ * CORS ORIGIN TROUBLESHOOTING & FIX
  *
- * To fix the CORS misrouting bug where the 'Access-Control-Allow-Origin' header
- * is set to the wrong allowed origin (e.g., admin domain instead of the real one),
- * we ensure that ONLY the exact requesting origin is echoed in the response
- * IF AND ONLY IF it is listed in `allowedOrigins`.
+ * The following implementation strictly echoes the incoming Origin BACK *only* if it matches the allowedOrigins array.
+ * This prevents misrouting (wrong ACAO origin for the given request) and addresses CORS misbehavior,
+ * such as responding with the admin domain to user traffic (or vice versa).
+ * 
+ * This approach is the recommended, standard-compliant way to do dynamic, secure multi-origin CORS.
  */
 
 const allowedOrigins = [
@@ -20,42 +20,43 @@ const allowedOrigins = [
   "https://www.sudhoshan-skill-solutions-admin.onrender.com",
   "https://sudhoshan-skill-solutions.onrender.com",
   "https://www.sudhoshan-skill-solutions.onrender.com",
-  
   "https://www.sudhosanskillsolutions.in",
   "https://admin.sudhosanskillsolutions.in",
   "https://www.admin.sudhosanskillsolutions.in",
-
-].filter(Boolean); // Remove undefined if env not set
+].filter(Boolean);
 
 const app = express();
 
-// Custom CORS handling to prevent incorrect origin reflection
-app.use(function (req, res, next) {
+// Strict, robust CORS middleware
+app.use((req, res, next) => {
   const origin = req.headers.origin;
+  if (!origin) return next(); // Non-browser/CLI/no Origin -> skip CORS
 
-  if (!origin) {
-    // no CORS headers for server-to-server/Postman/curl etc.
-    return next();
-  }
-
-  // Check if the actual request origin is allowed
   if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-    res.header("Vary", "Origin"); // Important for caches/proxies
-    res.header("Access-Control-Allow-Credentials", "true");
-    res.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,PATCH,OPTIONS");
-    res.header("Access-Control-Allow-Headers", "Content-Type,Authorization");
+    res.setHeader("Access-Control-Allow-Origin", origin);
+    res.setHeader("Vary", "Origin");
+    res.setHeader("Access-Control-Allow-Credentials", "true");
+    res.setHeader(
+      "Access-Control-Allow-Methods",
+      "GET,POST,PUT,DELETE,PATCH,OPTIONS"
+    );
+    res.setHeader(
+      "Access-Control-Allow-Headers",
+      "Content-Type,Authorization"
+    );
     if (req.method === "OPTIONS") {
-      // Preflight - advance response now with 200
+      // CORS preflight, short-circuit
       return res.sendStatus(200);
     }
     return next();
   } else {
-    // Not an allowed origin: do NOT set ACAO, fail preflight explicitly if needed
+    // Disallowed origin. Do NOT set ACAO. Explicitly reject preflights.
     if (req.method === "OPTIONS") {
       return res.status(403).send("CORS Forbidden: Origin not allowed");
     }
-    return res.status(403).json({ error: "CORS Forbidden: Origin not allowed" });
+    return res.status(403).json({
+      error: "CORS Forbidden: Origin not allowed",
+    });
   }
 });
 
