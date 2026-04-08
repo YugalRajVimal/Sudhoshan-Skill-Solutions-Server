@@ -14,10 +14,6 @@ const allowedOrigins = [
   "https://www.sudhosanskillsolutions.in",
   "https://admin.sudhosanskillsolutions.in",
   "https://www.admin.sudhosanskillsolutions.in",
-  "http://sudhosanskillsolutions.in",
-  "http://www.sudhosanskillsolutions.in",
-  "http://admin.sudhosanskillsolutions.in",
-  "http://www.admin.sudhosanskillsolutions.in",
   process.env.FRONTEND_URL,
 ];
 
