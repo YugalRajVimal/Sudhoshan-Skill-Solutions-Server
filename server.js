@@ -26,8 +26,6 @@ import { connectUsingMongoose } from "./config/mongoose.config.js";
 const allowedOrigins = [
   "https://sudhosanskillsolutions.in",
   "https://www.sudhosanskillsolutions.in",
-  "https://admin.sudhosanskillsolutions.in",
-  "https://www.admin.sudhosanskillsolutions.in",
 ].filter(Boolean);
 
 // SAFEGUARD: Prevent trailing slash mismatch
