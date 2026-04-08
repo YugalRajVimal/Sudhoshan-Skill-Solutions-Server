@@ -19,37 +19,28 @@ const allowedOrigins = [
 
 const app = express();
 
-// Allow only requests from allowedOrigins
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
-  if (allowedOrigins.includes(origin)) {
-    res.setHeader("Access-Control-Allow-Origin", origin);
-  }
-  res.setHeader("Access-Control-Allow-Credentials", "true");
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-  );
-  res.setHeader(
-    "Access-Control-Allow-Headers",
-    "Origin,X-Requested-With,Content-Type,Accept,Authorization"
-  );
-  if (req.method === "OPTIONS") return res.sendStatus(204);
-  next();
-});
-
+/**
+ * Ensure proper handling of CORS and avoid multiple or conflicting CORS headers.
+ * Use ONLY the cors middleware for all the logic.
+ * Remove the custom manual CORS header-setting middleware to ensure
+ * only one place is setting CORS headers and the header matches the
+ * exact value of the requesting origin.
+ * 
+ * The CORS middleware below:
+ *  - will reflect the allowed origin
+ *  - will handle credentials and headers correctly
+ *  - will short-circuit OPTIONS preflights with proper CORS headers and 204
+ */
 app.use(
   cors({
     origin: function (origin, callback) {
       // allow requests with no origin like mobile apps or curl etc
       if (!origin) return callback(null, true);
       if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
+        // Use the exact origin as the value for Access-Control-Allow-Origin
+        return callback(null, origin);
       }
-      return callback(
-        new Error("Not allowed by CORS: " + origin),
-        false
-      );
+      return callback(new Error("Not allowed by CORS: " + origin), false);
     },
     credentials: true,
     allowedHeaders: [
