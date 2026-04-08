@@ -25,10 +25,6 @@ import { connectUsingMongoose } from "./config/mongoose.config.js";
 
 const allowedOrigins = [
   "https://sudhosanskillsolutions.in",
-  "https://sudhoshan-skill-solutions-admin.onrender.com",
-  "https://www.sudhoshan-skill-solutions-admin.onrender.com",
-  "https://sudhoshan-skill-solutions.onrender.com",
-  "https://www.sudhoshan-skill-solutions.onrender.com",
   "https://www.sudhosanskillsolutions.in",
   "https://admin.sudhosanskillsolutions.in",
   "https://www.admin.sudhosanskillsolutions.in",
