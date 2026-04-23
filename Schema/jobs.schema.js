@@ -54,10 +54,19 @@ const jobSchema = new mongoose.Schema(
       required: false,
       trim: true,
       description: "Minimum qualification required for the job (e.g., B.Tech, MBA, Diploma, 12th Pass, etc.)"
+    },
+    order: {
+      type: Number,
+      required: false,
+      index: true,
+      description: "Ordering integer for manual sorting of jobs"
     }
   },
   { timestamps: true }
 );
+
+// Create index on the order field to make ordering/reordering queries efficient
+jobSchema.index({ order: 1 });
 
 const JobModel = mongoose.model("jobs", jobSchema);
 

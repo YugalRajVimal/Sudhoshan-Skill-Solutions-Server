@@ -11,6 +11,8 @@ const allowedOrigins = [
   "https://www.sudhosanskillsolutions.in",
   "https://admin.sudhosanskillsolutions.in",
   "https://www.admin.sudhosanskillsolutions.in",
+  "http://localhost:3000",
+  "http://localhost:5173"
 ];
 
 const app = express();

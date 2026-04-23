@@ -61,29 +61,24 @@ router.get("/all-data", async (req, res) => {
             });
           })()
         : [],
-      adminCourcesController.fetchCourses
-        ? await (async () => {
-            return new Promise((resolve, reject) => {
-              adminCourcesController.fetchCourses(
-                { query: {} },
-                {
-                  json: resolve,
-                  status: () => ({ json: reject }),
-                }
-              );
-            });
-          })()
-        : [],
+      // Always fetch courses sorted by the 'order' field as indexed in the schema for the correct display sequence.
+      // We bypass the controller method to guarantee correct sorting.
+      await (async () => {
+        try {
+          const { default: CourseModel } = await import('./Schema/cources.schema.js');
+          return await CourseModel.find().sort({ order: 1, createdAt: 1, _id: 1 }).lean();
+        } catch (e) {
+          return [];
+        }
+      })(),
       adminJobController.fetchJobs
         ? await (async () => {
             return new Promise((resolve, reject) => {
-              adminJobController.fetchJobs(
-                { query: {} },
-                {
-                  json: resolve,
-                  status: () => ({ json: reject }),
-                }
-              );
+              // Here, we override the fetchJobs to inject our own sort via the schema's order field.
+              // We will bypass the controller's fetchJobs and use the JobModel directly for correct ordering.
+              import('./Schema/jobs.schema.js').then(({ default: JobModel }) => {
+                JobModel.find().sort({ order: 1, createdAt: 1, _id: 1 }).lean().then(resolve).catch(reject);
+              }).catch(reject);
             });
           })()
         : [],

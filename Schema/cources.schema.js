@@ -79,10 +79,19 @@ const courseSchema = new mongoose.Schema(
       type: [String],
       required: true,
       description: "List of topics/modules covered in the course"
+    },
+    order: {
+      type: Number,
+      required: false,
+      index: true,
+      description: "Ordering integer for manual sorting of courses"
     }
   },
   { timestamps: true }
 );
+
+// Create index on the order field to make ordering/reordering queries efficient
+courseSchema.index({ order: 1 });
 
 const CourseModel = mongoose.model("courses", courseSchema);
 

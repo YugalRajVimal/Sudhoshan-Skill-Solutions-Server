@@ -39,12 +39,18 @@ adminRouter.post("/jobs", (req, res) => adminJobController.createJob(req, res));
 adminRouter.get("/jobs", (req, res) => adminJobController.fetchJobs(req, res));
 adminRouter.put("/jobs", (req, res) => adminJobController.editJob(req, res));
 adminRouter.delete("/jobs", (req, res) => adminJobController.deleteJob(req, res));
+// New endpoint to interchange (swap) two job positions by their IDs
+adminRouter.post("/jobs/interchange", (req, res) => adminJobController.reorderJobs(req, res));
+
 
 // Course Management Routes
 adminRouter.post("/courses", (req, res) => adminCourcesController.createCourse(req, res));
 adminRouter.get("/courses", (req, res) => adminCourcesController.fetchCourses(req, res));
 adminRouter.put("/courses", (req, res) => adminCourcesController.editCourse(req, res));
 adminRouter.delete("/courses", (req, res) => adminCourcesController.deleteCourse(req, res));
+// New endpoint to reorder courses (change display order using the 'order' field)
+adminRouter.post("/courses/reorder", (req, res) => adminCourcesController.reorderCourses(req, res));
+
 
 // Blog Management Routes
 adminRouter.post("/blogs", (req, res) => adminBlogController.createBlog(req, res));

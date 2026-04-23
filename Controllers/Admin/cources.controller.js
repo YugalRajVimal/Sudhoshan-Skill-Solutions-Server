@@ -125,6 +125,87 @@ class AdminCourcesController {
     }
   }
 
+  /**
+   * Reorder courses using the 'order' field for efficient indexing.
+   * This method moves the course with courseId (by _id or id or slug) to the given targetIndex,
+   * reassigning the 'order' field for all courses in the correct sequence.
+   *
+   * Expects body: { courseId: string, targetIndex: number }
+   */
+  async reorderCourses(req, res) {
+    try {
+      const { courseId, targetIndex } = req.body;
+      if (!courseId || typeof targetIndex !== "number" || isNaN(targetIndex)) {
+        return res.status(400).json({ error: "courseId and valid targetIndex are required." });
+      }
+
+      // Fetch all courses ordered by the 'order' field (from new schema, indexed)
+      let courses = await CourseModel.find().sort({ order: 1, createdAt: 1, _id: 1 }).lean();
+
+      // If no courses, nothing to reorder
+      if (!Array.isArray(courses) || courses.length === 0) {
+        return res.status(404).json({ error: "No courses found to reorder." });
+      }
+
+      // Ensure all courses have valid 'order' values as integers
+      const allOrdersPresent = courses.every(c => typeof c.order === "number" && Number.isInteger(c.order));
+      if (!allOrdersPresent) {
+        // Re-initialize order values to current array order
+        await Promise.all(
+          courses.map((course, idx) =>
+            CourseModel.updateOne({ _id: course._id }, { $set: { order: idx } })
+          )
+        );
+        courses = await CourseModel.find().sort({ order: 1, createdAt: 1, _id: 1 }).lean();
+      }
+
+      // Locate the course to move (by _id, id, or slug for flexibility)
+      let oldIndex = courses.findIndex(c =>
+        String(c._id) === String(courseId) ||
+        String(c.id) === String(courseId) ||
+        String(c.slug) === String(courseId)
+      );
+      if (oldIndex === -1) {
+        return res.status(404).json({ error: "Course to move not found." });
+      }
+
+      // Clamp the target index within bounds
+      const safeTargetIndex = Math.max(0, Math.min(targetIndex, courses.length - 1));
+      if (oldIndex === safeTargetIndex) {
+        // Still update to ensure order matches array position for integrity
+        await Promise.all(
+          courses.map((course, idx) =>
+            CourseModel.updateOne({ _id: course._id }, { $set: { order: idx } })
+          )
+        );
+        return res.status(200).json({ message: "No reordering needed; course is already at target position." });
+      }
+
+      // Perform the in-memory reordering
+      const [movedCourse] = courses.splice(oldIndex, 1);
+      courses.splice(safeTargetIndex, 0, movedCourse);
+
+      // Persist the new order back; use indexed 'order' field for future lookups
+      await Promise.all(
+        courses.map((course, idx) =>
+          CourseModel.updateOne({ _id: course._id }, { $set: { order: idx } })
+        )
+      );
+
+      // Return updated courses list using order (indexed) sort
+      const reorderedCourses = await CourseModel.find().sort({ order: 1, createdAt: 1, _id: 1 });
+
+      res.json({
+        message: "Courses reordered successfully.",
+        movedCourseId: courseId,
+        targetIndex: safeTargetIndex,
+        courses: reorderedCourses
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   // Delete a course by id or slug
   async deleteCourse(req, res) {
     try {

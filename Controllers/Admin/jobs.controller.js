@@ -70,6 +70,83 @@ class AdminJobController {
     }
   }
 
+  /**
+   * Reorder jobs using the new schema with the 'order' field for efficient indexing.
+   * This method moves the job with jobId to the given targetIndex, reassigning the 'order'
+   * field for all jobs in the correct sequence. Uses jobs.schema.js (with order indexing).
+   *
+   * Expects body: { jobId: string, targetIndex: number }
+   */
+  async reorderJobs(req, res) {
+    try {
+      const { jobId, targetIndex } = req.body;
+      if (!jobId || typeof targetIndex !== "number" || isNaN(targetIndex)) {
+        return res.status(400).json({ error: "jobId and valid targetIndex are required." });
+      }
+
+      // Fetch all jobs ordered by the 'order' field (from new schema, indexed)
+      let jobs = await JobModel.find().sort({ order: 1, createdAt: 1, _id: 1 }).lean();
+
+      // If no jobs, nothing to reorder
+      if (!Array.isArray(jobs) || jobs.length === 0) {
+        return res.status(404).json({ error: "No jobs found to reorder." });
+      }
+
+      // Ensure all jobs have valid 'order' values as integers
+      const allOrdersPresent = jobs.every(j => typeof j.order === "number" && Number.isInteger(j.order));
+      if (!allOrdersPresent) {
+        // Re-initialize order values to current array order (using indexed schema)
+        await Promise.all(
+          jobs.map((job, idx) =>
+            JobModel.updateOne({ _id: job._id }, { $set: { order: idx } })
+          )
+        );
+        jobs = await JobModel.find().sort({ order: 1, createdAt: 1, _id: 1 }).lean();
+      }
+
+      // Locate the job to move
+      const oldIndex = jobs.findIndex(j => String(j._id) === String(jobId));
+      if (oldIndex === -1) {
+        return res.status(404).json({ error: "Job to move not found." });
+      }
+
+      // Clamp the target index within bounds
+      const safeTargetIndex = Math.max(0, Math.min(targetIndex, jobs.length - 1));
+      if (oldIndex === safeTargetIndex) {
+        // Still update to ensure order matches array position for integrity
+        await Promise.all(
+          jobs.map((job, idx) =>
+            JobModel.updateOne({ _id: job._id }, { $set: { order: idx } })
+          )
+        );
+        return res.status(200).json({ message: "No reordering needed; job is already at target position." });
+      }
+
+      // Perform the in-memory reordering
+      const [movedJob] = jobs.splice(oldIndex, 1);
+      jobs.splice(safeTargetIndex, 0, movedJob);
+
+      // Persist the new order back; use indexed 'order' field for future lookups
+      await Promise.all(
+        jobs.map((job, idx) =>
+          JobModel.updateOne({ _id: job._id }, { $set: { order: idx } })
+        )
+      );
+
+      // Return updated jobs list using order (indexed) sort
+      const reorderedJobs = await JobModel.find().sort({ order: 1, createdAt: 1, _id: 1 });
+
+      res.json({
+        message: "Jobs reordered successfully.",
+        movedJobId: jobId,
+        targetIndex: safeTargetIndex,
+        jobs: reorderedJobs
+      });
+    } catch (error) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+
   // Delete a job by ID
   async deleteJob(req, res) {
     try {
