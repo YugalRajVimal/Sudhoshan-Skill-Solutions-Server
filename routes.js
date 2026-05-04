@@ -3,6 +3,8 @@ import adminRouter from "./Routers/admin.routes.js";
 import authRouter from "./Routers/auth.routes.js";
 import mongoose from "mongoose";
 
+const crypto = require('crypto');
+
 import AdminServicesController from "./Controllers/Admin/services.controller.js";
 import AdminCourcesController from "./Controllers/Admin/cources.controller.js";
 import AdminJobController from "./Controllers/Admin/jobs.controller.js";
@@ -34,6 +36,15 @@ const client = StandardCheckoutClient.getInstance(clientId, clientSecret, client
 
 
 const router = express.Router();
+
+
+// Pre-compute once at startup
+const PHONEPE_AUTH_TOKEN = crypto
+  .createHash('sha256')
+  .update(`${process.env.PHONEPE_WEBHOOK_USERNAME}:${process.env.PHONEPE_WEBHOOK_PASSWORD}`)
+  .digest('hex');
+
+const processedWebhooks = new Set();
 
 router.get("/", (req, res) => {
   res.send("Welcome to Sudhoshan Skill Solutions Server APIs");
@@ -350,10 +361,97 @@ router.post('/phonepe/create-order', async (req, res) => {
   }
 });
 
-router.get('/phonepe/webhook', async (req, res) => {
-  console.log("[PhonePe Webhook] Received webhook:", req.body);
-  res.json({ received: true });
+router.post('/phonepe/webhook', async (req, res) => {
+  // 1. Validate Authorization header FIRST
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || authHeader !== PHONEPE_AUTH_TOKEN) {
+    console.warn("[PhonePe Webhook] Unauthorized request — invalid or missing Authorization header");
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const body = req.body;
+  console.log("[PhonePe Webhook] Received:", JSON.stringify(body));
+
+  // 2. Idempotency — ignore duplicate webhooks
+  const orderId = body?.payload?.orderId || body?.payload?.refundId;
+  const eventKey = `${body?.event}:${orderId}`;
+
+  if (orderId && processedWebhooks.has(eventKey)) {
+    console.log(`[PhonePe Webhook] Duplicate event ignored: ${eventKey}`);
+    return res.status(200).json({ received: true }); // Still return 200
+  }
+
+  // 3. Acknowledge IMMEDIATELY (PhonePe expects 2xx within 3-5s)
+  res.status(200).json({ received: true });
+
+  // 4. Process asynchronously AFTER responding
+  try {
+    const { event, payload } = body;
+
+    // Use `event` field (not `type`) and `payload.state` for status
+    switch (event) {
+      case 'checkout.order.completed':
+        if (payload.state === 'COMPLETED') {
+          await handleOrderCompleted(payload);
+        }
+        break;
+
+      case 'checkout.order.failed':
+        if (payload.state === 'FAILED') {
+          await handleOrderFailed(payload);
+        }
+        break;
+
+      case 'pg.refund.completed':
+        if (payload.state === 'COMPLETED') {
+          await handleRefundCompleted(payload);
+        }
+        break;
+
+      case 'pg.refund.failed':
+        if (payload.state === 'FAILED') {
+          await handleRefundFailed(payload);
+        }
+        break;
+
+      default:
+        console.warn(`[PhonePe Webhook] Unknown event type: ${event}`);
+    }
+
+    if (orderId) processedWebhooks.add(eventKey);
+
+  } catch (err) {
+    // Don't let processing errors affect the 200 already sent
+    console.error("[PhonePe Webhook] Processing error:", err);
+  }
 });
+
+// --- Handlers ---
+
+async function handleOrderCompleted(payload) {
+  const { merchantOrderId, orderId, amount, paymentDetails } = payload;
+  console.log(`[PhonePe] Order completed: ${merchantOrderId}, amount: ${amount}`);
+  // TODO: Mark order as paid in your DB
+}
+
+async function handleOrderFailed(payload) {
+  const { merchantOrderId, paymentDetails } = payload;
+  const errorCode = paymentDetails?.[0]?.errorCode;
+  console.log(`[PhonePe] Order failed: ${merchantOrderId}, error: ${errorCode}`);
+  // TODO: Mark order as failed in your DB
+}
+
+async function handleRefundCompleted(payload) {
+  const { merchantRefundId, originalMerchantOrderId, amount } = payload;
+  console.log(`[PhonePe] Refund completed: ${merchantRefundId} for order ${originalMerchantOrderId}`);
+  // TODO: Update refund status in your DB
+}
+
+async function handleRefundFailed(payload) {
+  const { merchantRefundId, originalMerchantOrderId, errorCode } = payload;
+  console.log(`[PhonePe] Refund failed: ${merchantRefundId}, error: ${errorCode}`);
+  // TODO: Handle failed refund in your DB
+}
 
 // Get all Blogs
 router.get("/blogs", (req, res) => adminBlogController.fetchBlogs(req, res));
