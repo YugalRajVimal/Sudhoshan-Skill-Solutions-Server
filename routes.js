@@ -2,6 +2,7 @@ import express from "express";
 import adminRouter from "./Routers/admin.routes.js";
 import authRouter from "./Routers/auth.routes.js";
 import mongoose from "mongoose";
+import axios from "axios";
 
 import crypto from 'crypto';
 
@@ -15,6 +16,10 @@ import SubscribedUser from "./Schema/subscribed-users.schema.js";
 import AdminTestimonialController from "./Controllers/Admin/testimonial.controller.js";
 import TeamMember from "./Schema/team.schema.js";
 import statsAndClientSchema from "./Schema/statsAndClient.schema.js";
+// PhonePe: Get Order Status endpoint
+import { getPhonePeOAuthToken } from "./config/phonePay.config.js";
+
+
 
 // ====== PHONEPE ORDER CREATION with StandardCheckoutClient ======
 import { 
@@ -426,6 +431,93 @@ router.post('/phonepe/webhook', async (req, res) => {
     console.error("[PhonePe Webhook] Processing error:", err);
   }
 });
+
+
+
+
+
+router.get("/phonepe/order-status/:orderId", async (req, res) => {
+  const { orderId } = req.params;
+
+  if (!orderId) {
+    return res.status(400).json({ error: "orderId is required" });
+  }
+
+  try {
+    // 1. Fetch OAuth token from DB or API
+    const tokenData = await getPhonePeOAuthToken();
+    const accessToken = tokenData.access_token;
+
+    if (!accessToken) {
+      throw new Error("PhonePe access_token not found");
+    }
+
+    // 2. Prepare API request to PhonePe
+    const phonePeOrderStatusUrl = `https://api-preprod.phonepe.com/apis/pg-sandbox/checkout/v2/order/${orderId}/status`;
+
+    const response = await axios.get(phonePeOrderStatusUrl, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `O-Bearer ${accessToken}`,
+      },
+    });
+
+    // PhonePe status structure response (adapted to your provided structure)
+    const statusData = response.data?.data;
+
+    // If there is data from phonepe, update DB accordingly
+    if (statusData && statusData.orderId) {
+      // Find Enrollment by orderId
+      const enrollment = await Enrollment.findOne({ orderId: statusData.orderId });
+
+      if (enrollment) {
+        // Compose payment update info
+        let paymentStatus;
+        if (statusData.state === "COMPLETED") {
+          paymentStatus = "success";
+        } else if (statusData.state === "FAILED") {
+          paymentStatus = "failed";
+        } else {
+          paymentStatus = "pending";
+        }
+
+        // If transactionId available from phonepe response, update that too
+        let transactionId;
+        if (
+          Array.isArray(statusData.paymentDetails) &&
+          statusData.paymentDetails.length > 0 &&
+          statusData.paymentDetails[0].transactionId
+        ) {
+          transactionId = statusData.paymentDetails[0].transactionId;
+        }
+
+        // Collect payment method ("phonepe")
+        let paymentMethod = "phonepe";
+
+        // Update the enrollment
+        enrollment.paymentStatus = paymentStatus;
+        if (transactionId) enrollment.transactionId = transactionId;
+        enrollment.paymentMethod = paymentMethod;
+
+        // Optionally update amount/currency from status if needed
+        if (statusData.amount) enrollment.amount = statusData.amount;
+        if (statusData.currency) enrollment.currency = statusData.currency;
+
+        await enrollment.save();
+      }
+    }
+
+    // Forward PhonePe API response
+    return res.status(200).json({ status: "success", data: response.data });
+  } catch (error) {
+    console.error("[PhonePe] Get order status error:", error.response?.data || error.message);
+    return res.status(500).json({
+      status: "error",
+      error: error.response?.data || error.message,
+    });
+  }
+});
+
 
 // --- Handlers ---
 
