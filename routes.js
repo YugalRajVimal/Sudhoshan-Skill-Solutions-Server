@@ -3,6 +3,10 @@ import adminRouter from "./Routers/admin.routes.js";
 import authRouter from "./Routers/auth.routes.js";
 import mongoose from "mongoose";
 import axios from "axios";
+// Print paymentDetails with full properties, including inner objects/arrays, using util.inspect.
+import util from "util";
+
+
 
 import crypto from 'crypto';
 
@@ -440,6 +444,9 @@ router.get("/phonepe/order-status/:orderId", async (req, res) => {
   const { orderId } = req.params;
 
   if (!orderId) {
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[PhonePe][Order Status] No orderId provided.");
+    }
     return res.status(400).json({ error: "orderId is required" });
   }
 
@@ -449,11 +456,17 @@ router.get("/phonepe/order-status/:orderId", async (req, res) => {
     const accessToken = tokenData.access_token;
 
     if (!accessToken) {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[PhonePe][Order Status] Access token not found in DB/API.", { tokenData });
+      }
       throw new Error("PhonePe access_token not found");
     }
 
     // 2. Prepare API request to PhonePe
     const phonePeOrderStatusUrl = `https://api-preprod.phonepe.com/apis/pg-sandbox/checkout/v2/order/${orderId}/status`;
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[PhonePe][Order Status] Requesting:", phonePeOrderStatusUrl);
+    }
 
     const response = await axios.get(phonePeOrderStatusUrl, {
       headers: {
@@ -462,55 +475,87 @@ router.get("/phonepe/order-status/:orderId", async (req, res) => {
       },
     });
 
-    // PhonePe status structure response (adapted to your provided structure)
-    const statusData = response.data?.data;
+    // The actual status is within response.data, as per the provided sample
+    const phonePeData = response.data;
 
-    // If there is data from phonepe, update DB accordingly
-    if (statusData && statusData.orderId) {
-      // Find Enrollment by orderId
-      const enrollment = await Enrollment.findOne({ orderId: statusData.orderId });
+    if (process.env.NODE_ENV !== "production") {
+      console.log("[PhonePe][Order Status] Raw PhonePe response:", util.inspect(phonePeData, { depth: null, colors: false }));
+    }
+
+    // Extract enrollment update fields from provided PhonePe response structure
+    // Example provided:
+    // {
+    //   "orderId": "...",
+    //   "state": "...",
+    //   "amount": ...,
+    //   "currency": "...",
+    //   "expireAt": ...,
+    //   "paymentDetails": [{ ... }]
+    // }
+
+    if (phonePeData && phonePeData.orderId) {
+      const enrollment = await Enrollment.findOne({ orderId: orderId });
 
       if (enrollment) {
-        // Compose payment update info
+        // Determine paymentStatus
         let paymentStatus;
-        if (statusData.state === "COMPLETED") {
+        if (phonePeData.state === "COMPLETED") {
           paymentStatus = "success";
-        } else if (statusData.state === "FAILED") {
+        } else if (phonePeData.state === "FAILED") {
           paymentStatus = "failed";
         } else {
           paymentStatus = "pending";
         }
 
-        // If transactionId available from phonepe response, update that too
+        // Extract transactionId from paymentDetails (typically first array element)
         let transactionId;
         if (
-          Array.isArray(statusData.paymentDetails) &&
-          statusData.paymentDetails.length > 0 &&
-          statusData.paymentDetails[0].transactionId
+          Array.isArray(phonePeData.paymentDetails) &&
+          phonePeData.paymentDetails.length > 0 &&
+          phonePeData.paymentDetails[0].transactionId
         ) {
-          transactionId = statusData.paymentDetails[0].transactionId;
+          transactionId = phonePeData.paymentDetails[0].transactionId;
         }
 
-        // Collect payment method ("phonepe")
+        // Set paymentMethod as phonepe
         let paymentMethod = "phonepe";
 
-        // Update the enrollment
+        // Update enrollment fields
         enrollment.paymentStatus = paymentStatus;
-        if (transactionId) enrollment.transactionId = transactionId;
         enrollment.paymentMethod = paymentMethod;
-
-        // Optionally update amount/currency from status if needed
-        if (statusData.amount) enrollment.amount = statusData.amount;
-        if (statusData.currency) enrollment.currency = statusData.currency;
+        if (transactionId) enrollment.transactionId = transactionId;
+        if (typeof phonePeData.amount === "number") enrollment.amount = phonePeData.amount;
+        if (typeof phonePeData.currency === "string") enrollment.currency = phonePeData.currency;
 
         await enrollment.save();
+
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[PhonePe][Order Status] Enrollment updated successfully:", {
+            orderId: phonePeData.orderId,
+            paymentStatus: enrollment.paymentStatus,
+            transactionId: enrollment.transactionId,
+            paymentMethod: enrollment.paymentMethod,
+            amount: enrollment.amount,
+            currency: enrollment.currency,
+          });
+        }
+      } else {
+        if (process.env.NODE_ENV !== "production") {
+          console.log("[PhonePe][Order Status] Enrollment not found for orderId:", phonePeData.orderId);
+        }
+      }
+    } else {
+      if (process.env.NODE_ENV !== "production") {
+        console.log("[PhonePe][Order Status] No relevant data/orderId found in phonepe response.");
       }
     }
 
-    // Forward PhonePe API response
-    return res.status(200).json({ status: "success", data: response.data });
+    // Forward raw PhonePe API response
+    return res.status(200).json({ status: "success", data: phonePeData });
   } catch (error) {
-    console.error("[PhonePe] Get order status error:", error.response?.data || error.message);
+    if (process.env.NODE_ENV !== "production") {
+      console.error("[PhonePe] Get order status error:", error.response?.data || error.message);
+    }
     return res.status(500).json({
       status: "error",
       error: error.response?.data || error.message,
