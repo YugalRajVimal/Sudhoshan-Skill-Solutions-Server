@@ -371,6 +371,7 @@ router.post('/phonepe/webhook', async (req, res) => {
 
   const body = req.body;
   console.log("[PhonePe Webhook] Received:", JSON.stringify(body));
+  console.log(req.body);
 
   // 2. Idempotency — ignore duplicate webhooks
   const orderId = body?.payload?.orderId || body?.payload?.refundId;
