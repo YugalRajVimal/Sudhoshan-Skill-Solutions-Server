@@ -3,7 +3,7 @@ import adminRouter from "./Routers/admin.routes.js";
 import authRouter from "./Routers/auth.routes.js";
 import mongoose from "mongoose";
 
-const crypto = require('crypto');
+import crypto from 'crypto';
 
 import AdminServicesController from "./Controllers/Admin/services.controller.js";
 import AdminCourcesController from "./Controllers/Admin/cources.controller.js";
