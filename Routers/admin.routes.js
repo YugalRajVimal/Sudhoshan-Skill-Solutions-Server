@@ -129,4 +129,10 @@ adminRouter.delete("/placement-dashboard/clients/:id", (req, res) => adminStatsA
 // Replace the entire stats and clients arrays in singleton
 adminRouter.put("/placement-dashboard", (req, res) => adminStatsAndClientController.updateStatsAndClients(req, res));
 
+// Fetch overall enrollment statistics
+adminRouter.get("/enrollment-stats", (req, res) => 
+  adminController.getEnrollmentStats(req, res)
+);
+
+
 export default adminRouter;

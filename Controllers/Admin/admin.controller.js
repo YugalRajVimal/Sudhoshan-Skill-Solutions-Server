@@ -6,6 +6,7 @@ import SubscribedUser from "../../Schema/subscribed-users.schema.js";
 import TeamMemberModel from "../../Schema/team.schema.js";
 import StatsAndClientModel from "../../Schema/statsAndClient.schema.js";
 import TestimonialModel from "../../Schema/testiimonials.schema.js";
+import Enrollment from "../../Schema/enrollment.schema.js";
 
 class AdminController {
   // Get counts for Services, Jobs, Courses, Blogs, Subscribed Users, and also fetch all testimonials, team members, stats, and clients
@@ -51,6 +52,25 @@ class AdminController {
       return res.status(500).json({ message: 'Failed to fetch dashboard data', error: err?.message || err });
     }
   }
+
+// Get enrollment statistics
+async getEnrollmentStats(req, res) {
+  try {
+    // Populate the course related to each enrollment as per cources.schema.js
+    const enrollments = await Enrollment.find()
+      .populate({
+        path: "courseId", // field in enrollment that references "courses"
+        model: "courses", // matches model name in cources.schema.js
+        select: "-__v -createdAt -updatedAt", // exclude unwanted fields if needed
+      })
+      .lean();
+    return res.status(200).json({
+      enrollments
+    });
+  } catch (err) {
+    return res.status(500).json({ message: 'Failed to fetch enrollment data', error: err?.message || err });
+  }
+}
 }
 
 export default AdminController;
